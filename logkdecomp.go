@@ -113,7 +113,7 @@ func main() {
 	graphPath := flagSet.String("graph", "", "input (for format see hyperbench.dbai.tuwien.ac.at/downloads/manual.pdf)")
 	width := flagSet.Int("width", 0, "a positive, non-zero integer indicating the width of the HD to search for")
 	exact := flagSet.Bool("exact", false, "Compute exact width (width flag ignored)")
-	approx := flagSet.Int("approx", 0, "Compute approximated width and set a timeout in seconds (width flag ignored)")
+	// approx := flagSet.Int("approx", 0, "Compute approximated width and set a timeout in seconds (width flag ignored)")
 
 	// algorithms  flags
 	logK := flagSet.Bool("logk", false, "Use LogKDecomp algorithm")
@@ -142,11 +142,11 @@ func main() {
 	}
 
 	// Output usage message if graph and width not specified
-	if parseError != nil || *graphPath == "" || (*width <= 0 && !*exact && *approx == 0) {
+	if parseError != nil || *graphPath == "" || (*width <= 0 && !*exact) {
 		out := fmt.Sprint("Usage of log-k-decomp:")
 		fmt.Fprintln(os.Stderr, out)
 		flagSet.VisitAll(func(f *flag.Flag) {
-			if f.Name != "width" && f.Name != "graph" && f.Name != "exact" && f.Name != "approx" {
+			if f.Name != "width" && f.Name != "graph" && f.Name != "exact" {
 				return
 			}
 			s := fmt.Sprintf("%T", f.Value) // used to get type of flag
@@ -174,7 +174,7 @@ func main() {
 
 		fmt.Println("\nOptional Arguments: ")
 		flagSet.VisitAll(func(f *flag.Flag) {
-			if f.Name == "width" || f.Name == "graph" || f.Name == "exact" || f.Name == "approx" || f.Name == "logkHybrid" || f.Name == "logk" {
+			if f.Name == "width" || f.Name == "graph" || f.Name == "exact" || f.Name == "logkHybrid" || f.Name == "logk" {
 				return
 			}
 			s := fmt.Sprintf("%T", f.Value) // used to get type of flag
@@ -192,10 +192,10 @@ func main() {
 	// END Command-Line Argument Parsing
 	// ==============================================
 
-	if *exact && (*approx > 0) {
-		fmt.Println("Cannot have exact and approx flags set at the same time. Make up your mind.")
-		return
-	}
+	// if *exact && (*approx > 0) {
+	// 	fmt.Println("Cannot have exact and approx flags set at the same time. Make up your mind.")
+	// 	return
+	// }
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -377,10 +377,27 @@ func main() {
 		var decomp Decomp
 		start := time.Now()
 
-		if *hingeFlag {
-			decomp = hinget.DecompHinge(solver, parsedGraph)
+		if *exact {
+			solved := false
+			k := 1
+			for ; !solved; k++ {
+				solver.SetWidth(k)
+
+				if *hingeFlag {
+					decomp = hinget.DecompHinge(solver, parsedGraph)
+				} else {
+					decomp = solver.FindDecomp()
+				}
+
+				solved = decomp.Correct(parsedGraph)
+			}
+			*width = k - 1 // for correct output
 		} else {
-			decomp = solver.FindDecomp()
+			if *hingeFlag {
+				decomp = hinget.DecompHinge(solver, parsedGraph)
+			} else {
+				decomp = solver.FindDecomp()
+			}
 		}
 
 		d := time.Now().Sub(start)

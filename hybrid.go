@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/cem-okulmus/BalancedGo/lib"
+	"github.com/cem-okulmus/disjoint"
 )
 
 // HybridPredicate is used to determine when to switch from LogKDecomp to using DetKDecomp
@@ -25,6 +26,12 @@ type LogKHybrid struct {
 	Predicate HybridPredicate // used to determine when to switch to DetK
 	Size      int
 	level     int // keep track of
+	Generator lib.SearchGenerator
+}
+
+// SetGenerator defines the type of Search to use
+func (l *LogKHybrid) SetGenerator(Gen lib.SearchGenerator) {
+	l.Generator = Gen
 }
 
 // OneRoundPred will match the behaviour of BalDetK, with Depth 1
@@ -199,16 +206,18 @@ func (l *LogKHybrid) findDecomp(H lib.Graph, Conn []int, allowedFull lib.Edges, 
 	// Set up iterator for child
 
 	genChild := lib.SplitCombin(allowed.Len(), l.K, runtime.GOMAXPROCS(-1), false)
-	parallelSearch := lib.Search{H: &H, Edges: &allowed, BalFactor: l.BalFactor, Generators: genChild}
+	parallelSearch := l.Generator.GetSearch(&H, &allowed, l.BalFactor, genChild)
+	// parallelSearch := lib.Search{H: &H, Edges: &allowed, BalFactor: l.BalFactor, Generators: genChild}
 	pred := lib.BalancedCheck{}
 	parallelSearch.FindNext(pred) // initial Search
+	var Vertices = make(map[int]*disjoint.Element)
 
 	// checks all possibles nodes in H, together with PARENT loops, it covers all parent-child pairings
 CHILD:
-	for ; !parallelSearch.ExhaustedSearch; parallelSearch.FindNext(pred) {
+	for ; !parallelSearch.SearchEnded(); parallelSearch.FindNext(pred) {
 
-		childλ := lib.GetSubset(allowed, parallelSearch.Result)
-		compsε, _, _ := H.GetComponents(childλ)
+		childλ := lib.GetSubset(allowed, parallelSearch.GetResult())
+		compsε, _, _ := H.GetComponents(childλ, Vertices)
 
 		// log.Println("Balanced Child found, ", childλ)
 
@@ -251,16 +260,17 @@ CHILD:
 
 		allowedParent := lib.FilterVertices(allowed, append(Conn, childλ.Vertices()...))
 		genParent := lib.SplitCombin(allowedParent.Len(), l.K, runtime.GOMAXPROCS(-1), false)
-		parentalSearch := lib.Search{H: &H, Edges: &allowedParent, BalFactor: l.BalFactor, Generators: genParent}
-		predPar := lib.ParentCheck{Conn: Conn, Child: childλ.Vertices()}
+		parentalSearch := l.Generator.GetSearch(&H, &allowedParent, l.BalFactor, genParent)
+		// parentalSearch := lib.Search{H: &H, Edges: &allowedParent, BalFactor: l.BalFactor, Generators: genParent}
+		predPar := ParentCheck{Conn: Conn, Child: childλ.Vertices()}
 		parentalSearch.FindNext(predPar)
 		// parentFound := false
 	PARENT:
-		for ; !parentalSearch.ExhaustedSearch; parentalSearch.FindNext(predPar) {
+		for ; !parentalSearch.SearchEnded(); parentalSearch.FindNext(predPar) {
 
-			parentλ := lib.GetSubset(allowedParent, parentalSearch.Result)
+			parentλ := lib.GetSubset(allowedParent, parentalSearch.GetResult())
 			// log.Println("Looking at parent ", parentλ)
-			compsπ, _, isolatedEdges := H.GetComponents(parentλ)
+			compsπ, _, isolatedEdges := H.GetComponents(parentλ, Vertices)
 			// log.Println("Parent components ", comps_p)
 
 			foundLow := false
@@ -279,10 +289,10 @@ CHILD:
 				fmt.Println("Current SubGraph, ", H)
 				fmt.Println("Conn ", lib.PrintVertices(Conn))
 				fmt.Printf("Current Allowed Edges: %v\n", allowed)
-				fmt.Printf("Current Allowed Edges in Parent Search: %v\n", parentalSearch.Edges)
+				// fmt.Printf("Current Allowed Edges in Parent Search: %v\n", parentalSearch.Edges)
 				fmt.Println("Child ", childλ, "  ", lib.PrintVertices(childλ.Vertices()))
 				fmt.Println("Comps of child ", compsε)
-				fmt.Println("parent ", parentλ, "( ", parentalSearch.Result, " ) from the set: ", allowedParent)
+				fmt.Println("parent ", parentλ, "( ", parentalSearch.GetResult(), " ) from the set: ", allowedParent)
 				fmt.Println("Comps of p: ")
 				for i := range compsπ {
 					fmt.Println("Component: ", compsπ[i], " Len: ", compsπ[i].Len())
@@ -296,7 +306,7 @@ CHILD:
 			childχ := lib.Inter(childλ.Vertices(), vertCompLow)
 
 			// determine which components of child are inside comp_low
-			compsε, _, _ := compLow.GetComponents(childλ)
+			compsε, _, _ := compLow.GetComponents(childλ, Vertices)
 
 			//omitting the check for balancedness as it's guaranteed to still be conserved at this point
 
@@ -416,14 +426,14 @@ CHILD:
 						fmt.Println("Current SubGraph, ", H)
 						fmt.Println("Conn ", lib.PrintVertices(Conn))
 						fmt.Printf("Current Allowed Edges: %v\n", allowed)
-						fmt.Printf("Current Allowed Edges in Parent Search: %v\n", parentalSearch.Edges)
+						// fmt.Printf("Current Allowed Edges in Parent Search: %v\n", parentalSearch.Edges)
 						fmt.Println("Child ", childλ, "  ", lib.PrintVertices(childλ.Vertices()))
 						fmt.Println("Comps of child ", compsε)
-						fmt.Println("parent ", parentλ, "( ", parentalSearch.Result, " ) from the set: ", allowedParent)
+						fmt.Println("parent ", parentλ, "( ", parentalSearch.GetResult(), " ) from the set: ", allowedParent)
 						fmt.Println("comp_up ", compUp, " V(comp_up) ", lib.PrintVertices(compUp.Vertices()))
 						fmt.Println("Decomp up:  ", decompUpChan)
 						fmt.Println("Comps of p", compsπ)
-						fmt.Println("Compare against PredSearch: ", predPar.Check(&H, &parentλ, l.BalFactor))
+						fmt.Println("Compare against PredSearch: ", predPar.Check(&H, &parentλ, l.BalFactor, Vertices))
 
 						log.Panicln("Conn not covered in parent, Wait, what?")
 					}
