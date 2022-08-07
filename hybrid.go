@@ -10,6 +10,7 @@ import (
 
 	"github.com/cem-okulmus/BalancedGo/lib"
 	"github.com/cem-okulmus/disjoint"
+	logk "github.com/cem-okulmus/log-k-decomp/lib"
 )
 
 // HybridPredicate is used to determine when to switch from LogKDecomp to using DetKDecomp
@@ -218,7 +219,6 @@ CHILD:
 
 		childλ := lib.GetSubset(allowed, parallelSearch.GetResult())
 		compsε, _, _ := H.GetComponents(childλ, Vertices)
-
 		// log.Println("Balanced Child found, ", childλ)
 
 		// Check if child is possible root
@@ -262,7 +262,7 @@ CHILD:
 		genParent := lib.SplitCombin(allowedParent.Len(), l.K, runtime.GOMAXPROCS(-1), false)
 		parentalSearch := l.Generator.GetSearch(&H, &allowedParent, l.BalFactor, genParent)
 		// parentalSearch := lib.Search{H: &H, Edges: &allowedParent, BalFactor: l.BalFactor, Generators: genParent}
-		predPar := ParentCheck{Conn: Conn, Child: childλ.Vertices()}
+		predPar := logk.ParentCheck{Conn: Conn, Child: childλ.Vertices()}
 		parentalSearch.FindNext(predPar)
 		// parentFound := false
 	PARENT:

@@ -15,17 +15,9 @@ import (
 	"runtime/pprof"
 	"time"
 
+	algo "github.com/cem-okulmus/BalancedGo/algorithms"
 	"github.com/cem-okulmus/BalancedGo/lib"
 )
-
-// Algorithm serves as the common interface of all hypergraph decomposition algorithms
-type Algorithm interface {
-	// A Name is useful to identify the individual algorithms in the result
-	Name() string
-	FindDecomp() lib.Decomp
-	FindDecompGraph(G lib.Graph) lib.Decomp
-	SetWidth(K int)
-}
 
 // Decomp used to improve readability
 type Decomp = lib.Decomp
@@ -324,7 +316,7 @@ func main() {
 		}
 	}
 
-	var solver Algorithm
+	var solver algo.Algorithm
 
 	// Check for multiple flags
 	chosen := 0
@@ -373,6 +365,8 @@ func main() {
 	}
 
 	if solver != nil {
+
+		solver.SetGenerator(lib.ParallelSearchGen{})
 
 		var decomp Decomp
 		start := time.Now()
