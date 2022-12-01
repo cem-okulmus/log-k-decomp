@@ -108,8 +108,8 @@ func main() {
 	// approx := flagSet.Int("approx", 0, "Compute approximated width and set a timeout in seconds (width flag ignored)")
 
 	// algorithms  flags
-	logK := flagSet.Bool("logk", false, "Use LogKDecomp algorithm")
-	logKHybrid := flagSet.Int("logkHybrid", 0, "Use DetK - LogK Hybrid algorithm. Choose which predicate to use")
+	logK := flagSet.Bool("logk", false, "Use non-hybrid LogKDecomp algorithm (not recommended)")
+	// logKHybrid := flagSet.Bool("logkHybrid", false, "Use DetK - LogK Hybrid algorithm. Choose non-zero values to use specific forms of hybridisation, otherwise the default one is chosen.")
 
 	// heuristic flags
 	heur := "1 ... Vertex Degree Ordering\n\t2 ... Max. Separator Ordering\n\t3 ... MCSO\n\t4 ... Edge Degree Ordering"
@@ -119,6 +119,7 @@ func main() {
 	hingeFlag := flagSet.Bool("h", false, "use hingeTree Optimization")
 
 	//other optional  flags
+	logKHybridCustom := flagSet.Int("logkHybridCustom", 0, "Use DetK - LogK Hybrid algorithm, but non-standard form of hybridisation.")
 	cpuprofile := flagSet.String("cpuprofile", "", "write cpu profile to file")
 	logging := flagSet.Bool("log", false, "turn on extensive logs")
 	balanceFactorFlag := flagSet.Int("balfactor", 2, "Changes the factor that balanced separator check uses, default 2")
@@ -126,7 +127,7 @@ func main() {
 	bench := flagSet.Bool("bench", false, "Benchmark mode, reduces unneeded output (incompatible with -log flag)")
 	gml := flagSet.String("gml", "", "Output the produced decomposition into the specified gml file ")
 	pace := flagSet.Bool("pace", false, "Use PACE 2019 format for graphs (see pacechallenge.org/2019/htd/htd_format/)")
-	meta := flagSet.Int("meta", 0, "meta parameter for LogKHybrid")
+	meta := flagSet.Int("meta", 0, "meta parameter for LogKHybrid, to be used when choosing non-zero values in the logKHybrid flag.")
 
 	parseError := flagSet.Parse(os.Args[1:])
 	if parseError != nil {
@@ -321,6 +322,25 @@ func main() {
 	// Check for multiple flags
 	chosen := 0
 
+	// LogkHybrid Default
+	if !*logK && *logKHybridCustom == 0 {
+		logKHyb := LogKHybrid{
+			Graph:     parsedGraph,
+			K:         *width,
+			BalFactor: BalFactor,
+		}
+		logKHyb.Size = 300 // use the default case
+
+		var pred HybridPredicate
+
+		pred = logKHyb.ETimesKDivAvgEdgePred // use the default method
+
+		logKHyb.Predicate = pred // set the predicate to use
+
+		solver = &logKHyb
+		chosen++
+	}
+
 	if *logK {
 		logK := LogKDecomp{
 			Graph:     parsedGraph,
@@ -331,7 +351,8 @@ func main() {
 		chosen++
 	}
 
-	if *logKHybrid > 0 {
+	// LogkHybrid Custom - To be used if you know what you are doing
+	if *logKHybridCustom > 0 {
 		logKHyb := LogKHybrid{
 			Graph:     parsedGraph,
 			K:         *width,
@@ -341,7 +362,7 @@ func main() {
 
 		var pred HybridPredicate
 
-		switch *logKHybrid {
+		switch *logKHybridCustom {
 		case 1:
 			pred = logKHyb.NumberEdgesPred
 		case 2:
